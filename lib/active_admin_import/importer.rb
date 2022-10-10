@@ -3,7 +3,7 @@ require 'csv'
 module ActiveAdminImport
   class Importer
     attr_reader :resource, :options, :result, :model
-    attr_accessor :csv_lines, :headers
+    attr_accessor :csv_lines, :headers, :original_headers
 
     OPTIONS = [
       :validate,
@@ -83,7 +83,7 @@ module ActiveAdminImport
     def batch_slice_columns(slice_columns)
       # Only set @use_indexes for the first batch so that @use_indexes are in correct
       # position for subsequent batches
-      unless defined?(@use_indexes)
+      unless defined?(@use_indexes) && @use_indexes.length == @headers.values.length
         @use_indexes = []
         headers.values.each_with_index do |val, index|
           @use_indexes << index if val.in?(slice_columns)
@@ -98,6 +98,10 @@ module ActiveAdminImport
       csv_lines.map! do |line|
         line.values_at(*@use_indexes)
       end
+    end
+
+    def restore_headers
+      @headers = @original_headers.clone
     end
 
     def values_at(header_key)
@@ -131,6 +135,7 @@ module ActiveAdminImport
       headers = self.headers.present? ? self.headers.map(&:to_s) : yield
       @headers = Hash[headers.zip(headers.map { |el| el.underscore.gsub(/\s+/, '_') })].with_indifferent_access
       @headers.merge!(options[:headers_rewrites].symbolize_keys.slice(*@headers.symbolize_keys.keys))
+      @original_headers = @headers.clone
       @headers
     end
 
