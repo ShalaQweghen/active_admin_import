@@ -104,8 +104,9 @@ module ActiveAdminImport
       @headers = @original_headers.clone
     end
 
-    def values_at(header_key)
-      csv_lines.collect { |line| line[header_index(header_key)] }.uniq
+    def values_at(header_key, unique = true)
+      lines = csv_lines.collect { |line| line[header_index(header_key)] }
+      unique ? lines.uniq : lines
     end
 
     def header_index(header_key)
