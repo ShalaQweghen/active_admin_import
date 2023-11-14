@@ -96,6 +96,38 @@ describe 'import', type: :feature do
         end
         include_examples 'successful inserts for author'
       end
+
+      context 'when template object passed like proc' do
+        before do
+          add_post_resource(template_object: -> { ActiveAdminImport::Model.new(author_id: author.id) },
+                            validate: true,
+                            before_batch_import: lambda do |importer|
+                              importer.csv_lines.map! { |row| row << importer.model.author_id }
+                              importer.headers.merge!(:'Author Id' => :author_id)
+                            end
+          )
+
+          visit '/admin/posts/import'
+          upload_file!(:posts_for_author)
+        end
+
+        include_examples 'successful inserts for author'
+
+        context 'after successful import try without file' do
+          let(:after_successful_import_do!) do
+            # reload page
+            visit '/admin/posts/import'
+            # submit form without file
+            find_button('Import').click
+          end
+
+          it 'should render validation error' do
+            after_successful_import_do!
+
+            expect(page).to have_content I18n.t('active_admin_import.no_file_error')
+          end
+        end
+      end
     end
 
     context 'for csv with author name' do
@@ -422,6 +454,36 @@ describe 'import', type: :feature do
           upload_file!(:authors_with_tabs, 'tsv')
           expect(page).to have_content 'Successfully imported 2 authors'
           expect(Author.count).to eq(2)
+        end
+      end
+
+      context 'with empty csv and auto detect encoding' do
+        let(:options) do
+          attributes = { force_encoding: :auto }
+          { template_object: ActiveAdminImport::Model.new(attributes) }
+        end
+
+        before do
+          upload_file!(:empty)
+        end
+
+        it 'should render warning' do
+          expect(page).to have_content I18n.t('active_admin_import.file_empty_error')
+          expect(Author.count).to eq(0)
+        end
+      end
+
+      context 'with csv which has exceeded values' do
+        before do
+          upload_file!(:authors_values_exceeded_headers)
+        end
+
+        it 'should render warning' do
+          # 5 columns: 'birthday, name, last_name, created_at, updated_at'
+          # 6 values: '"1988-11-16", "Jane", "Roe", " exceeded value", datetime, datetime'
+          msg = 'Number of values (6) exceeds number of columns (5)'
+          expect(page).to have_content I18n.t('active_admin_import.file_error', message: msg)
+          expect(Author.count).to eq(0)
         end
       end
     end
